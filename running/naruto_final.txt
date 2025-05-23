@@ -1,0 +1,152 @@
+from ursina import *
+from direct.actor.Actor import Actor
+from random import choice
+
+app = Ursina()
+
+# — Window & lighting
+window.title = 'Temple Run Style Game'
+window.borderless = False
+window.fullscreen = False
+window.color = color.black
+
+Sky()
+DirectionalLight(y=10, z=10, rotation=(45, -45, 45), shadows=True)
+
+# — Score UI
+score = 0
+score_text = Text(lambda: f"Score: {score}", position=(-0.85, 0.45), scale=2)
+
+# — Ground illusion
+ground = Entity(
+    model='plane',
+    texture='white_cube',
+    color=color.gray,
+    scale=(20,1,200),    # extend behind and ahead
+    texture_scale=(10,100),
+    collider='box',
+    y=0, z=0
+)
+
+# — Player entity holding a Panda3D Actor
+player = Entity()
+player.collider = 'box'
+player.speed = 5
+player.actor = Actor(
+    "untitled.glb",
+    {"run": "untitled.glb"}
+)
+player.actor.reparentTo(player)
+player.actor.setScale(1.5)
+player.actor.setH(180)
+player.actor.loop("run")
+player.position = Vec3(0, 0, -10)
+
+# — Obstacles: spawn one obstacle per lane per interval
+lanes = [-4, 0, 4]
+obstacles = []
+def spawn_obstacles():
+    obstacles.clear()
+    for z in range(10, 200, 20):
+        for lane in lanes:
+            obstacles.append(Entity(
+                model='cube', color=color.red, scale=2,
+                position=(lane,1,z), collider='box'
+            ))
+spawn_obstacles()
+
+# — Game state & restart UI
+game_over = False
+restart_button = Button("Restart", scale=(.2,.1), visible=False)
+restart_button.on_click = lambda: restart_game()
+game_over_text = None
+
+# — Input handling: lane slide, jump, restart
+def input(key):
+    global game_over
+    if game_over and key == 'r':
+        restart_game()
+        return
+    if game_over:
+        return
+
+    if key == 'a' and player.x > min(lanes):
+        player.animate_x(player.x - 4, duration=0.2, curve=curve.out_expo)
+    if key == 'd' and player.x < max(lanes):
+        player.animate_x(player.x + 4, duration=0.2, curve=curve.out_expo)
+
+    if key == 'space' and abs(player.y) < 0.01:
+        player.actor.stop()
+        player.animate_y(3, duration=0.3, curve=curve.out_expo)
+        invoke(lambda: [setattr(player, 'y', 0), player.actor.loop("run")], delay=0.6)
+
+# — Main update loop
+def update():
+    global score, game_over
+    if game_over:
+        return
+
+    # Move forward illusion
+    dist = time.dt * player.speed
+    player.z += dist
+    ground.z = player.z
+
+    # Camera follow
+    camera.position = Vec3(player.x, player.y + 4, player.z - 15)
+    camera.rotation_x = 15
+    camera.look_at(player.position + Vec3(0,2,0))
+
+    # Recycle obstacles: when the nearest set passes behind
+    if obstacles and obstacles[0].z < player.z - 10:
+        # remove all obstacles at this z
+        current_z = obstacles[0].z
+        while obstacles and obstacles[0].z == current_z:
+            destroy(obstacles.pop(0))
+        # spawn new set at end
+        new_z = obstacles[-1].z + 20 if obstacles else player.z + 200
+        for lane in lanes:
+            obstacles.append(Entity(
+                model='cube', color=color.red, scale=2,
+                position=(lane,1,new_z), collider='box'
+            ))
+
+    # Collision detection
+    for o in obstacles:
+        if player.intersects(o).hit:
+            show_game_over()
+            game_over = True
+            player.actor.stop()
+            return
+
+    # Update score display
+    score = int(player.z + 10)
+    score_text.text = f"Score: {score}"
+
+# — Game over display
+def show_game_over():
+    global game_over_text
+    game_over_text = Text(
+        "GAME OVER\n(press R to restart)",
+        scale=2, origin=(0,0), background=True, color=color.red
+    )
+    restart_button.visible = True
+
+# — Restart everything
+def restart_game():
+    global score, game_over, game_over_text
+    game_over = False
+    score = 0
+    restart_button.visible = False
+
+    if game_over_text:
+        destroy(game_over_text)
+        game_over_text = None
+
+    player.position = Vec3(0, 0, -10)
+    player.actor.setH(180)
+    player.actor.loop("run")
+    ground.z = player.z
+
+    spawn_obstacles()
+
+app.run()
