@@ -4,6 +4,6 @@ A 3D endless runner game inspired by Naruto. Collect coins, dodge obstacles, and
 
 Screenshots
 
-<img src="images/naruto.png" width="400" alt="Game scene">
-<img src="images/naruto1.png" width="400" alt="Game scene">
-<img src="images/restart.png" width="400" alt="Restart screen">
+<img src="naruto.png" width="400" alt="Game scene">
+<img src="naruto1.png" width="400" alt="Game scene">
+<img src="restart.png" width="400" alt="Restart screen">
